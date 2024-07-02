@@ -1,6 +1,6 @@
-use crate::llm::interface::LLMClient;
-use crate::data::task::PartialModel as PartialTaskModel;
+use crate::domain::task::model::PartialTask;
 use crate::input::parsing_pipeline_steps::params::Params;
+use crate::llm::interface::LLMClient;
 use anyhow::Error;
 use schemars::schema::RootSchema;
 use schemars::schema_for_value;
@@ -27,7 +27,7 @@ impl Intent {
             }),
             Intent::ModifyExistingTask => schema_for_value!(Params::ModifyExistingTask {
                 task_id: Default::default(),
-                fields_to_modify: PartialTaskModel {
+                fields_to_modify: PartialTask {
                     ..Default::default()
                 },
             }),

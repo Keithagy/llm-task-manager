@@ -16,34 +16,16 @@ pub struct Client {
 #[async_trait]
 impl LLMClient<String> for Client {
     async fn prompt(&self, prompt: &str) -> anyhow::Result<String> {
-        let request = CreateChatCompletionRequestArgs::default()
-            .model("gpt-3.5-turbo")
-            .n(1)
-            .response_format(ChatCompletionResponseFormat {
-                r#type: ChatCompletionResponseFormatType::JsonObject,
-            })
-            .messages(vec![
-                ChatCompletionRequestSystemMessageArgs::default()
-                    .content(&self.system_prompt)
-                    .build()?
-                    .into(),
-                ChatCompletionRequestUserMessageArgs::default()
-                    .content(prompt)
-                    .build()?
-                    .into(),
-            ])
-            .build()?;
-        let chat_completion_response = self.inner_client.chat().create(request).await?;
-        let completion_choice = chat_completion_response
-            .choices
-            .first()
-            .take()
-            .ok_or(LLMError::NoChoicesGenerated)?;
-        Ok(completion_choice
-            .clone()
-            .message
-            .content
-            .ok_or(LLMError::NoChoicesGenerated)?)
+        Self::prompt_inner(prompt, &self.system_prompt, &self.inner_client).await
+    }
+
+    async fn prompt_system_customized(
+        &self,
+        prompt: &str,
+        customize_system_prompt: &str,
+    ) -> anyhow::Result<String> {
+        let extended_system_prompt = format!("{}\n{}", customize_system_prompt, self.system_prompt);
+        Self::prompt_inner(prompt, &extended_system_prompt, &self.inner_client).await
     }
 }
 
@@ -58,5 +40,39 @@ impl Client {
                 .or(Some(DEFAULT_SYSTEM_PROMPT.to_string()))
                 .expect("use default system prompt if none provided"),
         }
+    }
+    async fn prompt_inner(
+        prompt: &str,
+        system_prompt: &str,
+        client: &InnerClient<OpenAIConfig>,
+    ) -> anyhow::Result<String> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .model("gpt-3.5-turbo")
+            .n(1)
+            .response_format(ChatCompletionResponseFormat {
+                r#type: ChatCompletionResponseFormatType::JsonObject,
+            })
+            .messages(vec![
+                ChatCompletionRequestSystemMessageArgs::default()
+                    .content(system_prompt)
+                    .build()?
+                    .into(),
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(prompt)
+                    .build()?
+                    .into(),
+            ])
+            .build()?;
+        let chat_completion_response = client.chat().create(request).await?;
+        let completion_choice = chat_completion_response
+            .choices
+            .first()
+            .take()
+            .ok_or(LLMError::NoChoicesGenerated)?;
+        Ok(completion_choice
+            .clone()
+            .message
+            .content
+            .ok_or(LLMError::NoChoicesGenerated)?)
     }
 }

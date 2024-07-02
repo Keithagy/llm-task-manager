@@ -27,9 +27,9 @@ pub async fn resolve(intent: Intent, params: Params) -> Outcome {
         (
             Intent::CreateNewTask,
             Params::CreateNewTask {
-                description,
-                due_date,
-                assignee,
+                description: _,
+                due_date: _,
+                assignee: _,
             },
         ) => todo!(),
         (Intent::ModifyExistingTask, Params::ModifyExistingTask { .. }) => todo!(),

@@ -1,12 +1,13 @@
 #![feature(associated_type_defaults)]
 
-mod data;
+mod db;
+mod domain;
 mod input;
 mod llm;
 mod telegram_bot;
 
-use crate::data::flow::inject_task_management_dependencies;
-use crate::data::TaskRepo;
+use db::task::TaskRepo;
+use domain::task::flow::inject_task_management_dependencies;
 use llm::backend::openai;
 use sqlx::postgres::PgPool;
 use std::env;
@@ -49,7 +50,6 @@ In the event of errors or uncertain outcome, return the empty JSON object."#,
             Ok(())
         },
     )
-    .await?;
+    .await;
     Ok(())
 }
-

@@ -1,24 +1,17 @@
-use crate::data::task::Model;
+use crate::domain::task::model::Task;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-pub mod flow;
-pub mod task;
+use super::interface::Repository;
 
-#[async_trait]
-pub trait Repository<T> {
-    async fn save(&self, new: T) -> anyhow::Result<T>;
-    async fn retrieve_by_id(&self, id: Uuid) -> anyhow::Result<T>;
-    async fn delete_by_id(&self, id: Uuid) -> anyhow::Result<T>;
-}
-
+// TODO: decouple db schema changes from domain model changes by introducing db layer-specific
+// entity struct
 pub struct TaskRepo<T: sqlx::Database> {
     db_pool: sqlx::pool::Pool<T>,
 }
-
 #[async_trait]
-impl<T: sqlx::Database> Repository<Model> for TaskRepo<T> {
-    async fn save(&self, new: Model) -> anyhow::Result<Model> {
+impl<T: sqlx::Database> Repository<Task> for TaskRepo<T> {
+    async fn save(&self, new: Task) -> anyhow::Result<Task> {
         Ok(sqlx::query!(
             r#"
             INSERT INTO tasks (task_id, description, create_date, due_date, assignee)
@@ -35,7 +28,7 @@ impl<T: sqlx::Database> Repository<Model> for TaskRepo<T> {
         .await?)
     }
 
-    async fn retrieve_by_id(&self, id: Uuid) -> anyhow::Result<Model> {
+    async fn retrieve_by_id(&self, id: Uuid) -> anyhow::Result<Task> {
         let task = sqlx::query_as!(
             Task,
             r#"
@@ -51,7 +44,12 @@ impl<T: sqlx::Database> Repository<Model> for TaskRepo<T> {
         Ok(task)
     }
 
-    async fn delete_by_id(&self, id: Uuid) -> anyhow::Result<Model> {
+    async fn delete_by_id(&self, id: Uuid) -> anyhow::Result<Task> {
+        let query = r#"
+            DELETE FROM tasks
+            WHERE task_id = $1
+            RETURNING task_id, description, create_date, due_date, assignee
+            "#;
         Ok(sqlx::query_as!(
             Task,
             r#"

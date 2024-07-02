@@ -4,7 +4,7 @@ use partial_derive::Partial;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 #[derive(FilterByField, Partial, Debug, Clone, Serialize, Deserialize)]
-pub struct Model {
+pub struct Task {
     #[serde(with = "uuid::serde::simple")]
     pub id: Uuid,
     pub description: String,
@@ -15,16 +15,23 @@ pub struct Model {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FieldFilter {
-    pub field: ModelField,
-    pub filter_description: String,
+    pub field: TaskField,
+    pub sql_query: CheckedSqlQuery,
 }
+
+// NOTE: this is distinct from `&str` because it denotes that some SQL validation step has been
+// cleared prior to being passed to the database
+// FIXME: due consideration to be given to stopping LLM from generating security-compromising
+// queries, as well as queries doing anything that isn't reading
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckedSqlQuery(String);
 
 pub enum ParamTransformErr {
     /// You are trying to convert Params into a Model where you shouldn't be (e.g. Delete)
     WrongAccessContext,
 }
 use crate::input::Params;
-impl TryFrom<Params> for PartialModel {
+impl TryFrom<Params> for PartialTask {
     type Error = ParamTransformErr;
     fn try_from(value: Params) -> Result<Self, Self::Error> {
         match value {
@@ -32,7 +39,7 @@ impl TryFrom<Params> for PartialModel {
                 description,
                 due_date,
                 assignee,
-            } => Ok(PartialModel {
+            } => Ok(PartialTask {
                 id: None,
                 description: Some(description),
                 create_date: Some(Utc::now()),
@@ -43,4 +50,3 @@ impl TryFrom<Params> for PartialModel {
         }
     }
 }
-

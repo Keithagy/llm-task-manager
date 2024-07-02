@@ -1,5 +1,5 @@
 use super::intent::Intent;
-use crate::data::task::{FieldFilter as TaskFieldFilter, PartialModel as PartialTaskModel};
+use crate::domain::task::model::{FieldFilter, PartialTask};
 use anyhow::Error;
 use serde::Deserialize;
 use serde::Serialize;
@@ -20,14 +20,14 @@ pub enum Params {
     ModifyExistingTask {
         #[serde(with = "uuid::serde::simple")]
         task_id: Uuid,
-        fields_to_modify: PartialTaskModel,
+        fields_to_modify: PartialTask,
     },
     DeleteTask {
         #[serde(with = "uuid::serde::simple")]
         task_id: Uuid,
     },
     QueryTasksParams {
-        query_filters: Vec<TaskFieldFilter>,
+        query_filters: Vec<FieldFilter>,
     },
 }
 

@@ -51,6 +51,7 @@ In the event of errors or uncertain outcome, return the empty JSON object."#,
         Update::filter_message()
             .enter_dialogue::<Message, InMemStorage<telegram_bot::InteractionSteps>, telegram_bot::InteractionSteps>()
             .branch(dptree::case![telegram_bot::InteractionSteps::ReceiveInput].endpoint(receive_input))
+            .branch(dptree::case![telegram_bot::InteractionSteps::ValidateParams { input, intent, params }].endpoint(validate_params))
     )
     .dependencies(dptree::deps![
         ctx,
@@ -167,7 +168,10 @@ Params: {}
                                 intent,
                                 extraction_attempt
                             ),
-                        );
+                        ).await;
+                        // TODO: based on missing params, ask the user to provide in a subsequent
+                        // message, and first generate schema based on missing fields and then run
+                        // transcription / extraction against that
                         dialogue
                             .update(telegram_bot::InteractionSteps::ValidateParams {
                                 input: content,
@@ -191,6 +195,27 @@ Params: {}
             }
         }
     })
+}
+
+async fn validate_params<
+    T: transcription::interface::TranscriptionClient,
+    L: llm::interface::LLMClient<String>,
+    S: domain::task::service::TaskDataFlows,
+>(
+    bot: Bot,
+    msg: Message,
+    dialogue: telegram_bot::Dialogue,
+    ctx: Arc<Context<T, L, S>>,
+    input: String,
+    intent: input::parsing_pipeline_steps::intent::Intent,
+    params: Option<input::parsing_pipeline_steps::params::Extraction>,
+) -> anyhow::Result<()> {
+    // Again, safe concurrent access to the shared context
+    let task_data_flows = &ctx.task_data_flows;
+
+    // Handler logic here...
+
+    Ok(())
 }
 
 async fn transcribe_voice_input<

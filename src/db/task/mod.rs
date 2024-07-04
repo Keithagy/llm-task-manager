@@ -2,15 +2,16 @@ use crate::domain::task::model::Task;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use super::interface::Repository;
+use super::interface;
 
 // TODO: decouple db schema changes from domain model changes by introducing db layer-specific
 // entity struct
-pub struct TaskRepo<T: sqlx::Database> {
-    db_pool: sqlx::pool::Pool<T>,
+#[derive(Clone)]
+pub struct Repository<DB: sqlx::Database> {
+    db_pool: sqlx::Pool<DB>,
 }
 #[async_trait]
-impl<T: sqlx::Database> Repository<Task> for TaskRepo<T> {
+impl<DB: sqlx::Database> interface::Repository<Task> for Repository<DB> {
     async fn save(&self, new: Task) -> anyhow::Result<Task> {
         Ok(sqlx::query!(
             r#"
@@ -63,7 +64,7 @@ impl<T: sqlx::Database> Repository<Task> for TaskRepo<T> {
         .await?)
     }
 }
-impl<T: sqlx::Database> TaskRepo<T> {
+impl<T: sqlx::Database> Repository<T> {
     pub fn new(pool: sqlx::Pool<T>) -> Self {
         Self { db_pool: pool }
     }

@@ -1,6 +1,48 @@
+use crate::{
+    domain::task::service::TaskDataFlows,
+    input::parsing_pipeline_steps::{intent::Intent, params::Extraction},
+    llm,
+};
 use core::fmt;
 
 pub const TELEGRAM_BOT_API_KEY: &str = "7011341978:AAE0gWDYiKkRHJYEgPXibP48itZiMuzcKAE";
+
+use teloxide::dispatching::dialogue;
+pub type Dialogue = dialogue::Dialogue<InteractionSteps, dialogue::InMemStorage<InteractionSteps>>;
+
+#[derive(Clone, Default)]
+pub enum InteractionSteps {
+    #[default]
+    ReceiveInput,
+    ExtractIntent {
+        input: String,
+    },
+    ExtractParams {
+        input: String,
+        intent: Intent,
+    },
+    ValidateParams {
+        input: String,
+        intent: Intent,
+        params: Option<Extraction>,
+    },
+    NotifyExecute {
+        intent: Intent,
+        params: Extraction,
+    },
+    NotifyResult,
+}
+
+pub struct Context<
+    T: llm::interface::TranscriptionClient,
+    L: llm::interface::LLMClient<String>,
+    S: TaskDataFlows,
+> {
+    pub transcription_client: T,
+    pub llm_client: L,
+    pub task_data_flows: S,
+    pub chat_log: Vec<String>,
+}
 
 pub trait Describe {
     fn describe(&self) -> impl fmt::Display;

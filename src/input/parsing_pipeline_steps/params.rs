@@ -1,58 +1,61 @@
 use super::intent::Intent;
-use crate::domain::task::model::{FieldFilter, PartialTask};
+use crate::domain::task::model::{PartialTask, TaskFieldFilter};
 use anyhow::Error;
+use partial_derive::Partial;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
-use uuid::Uuid;
 
 use crate::llm::interface::LLMClient;
 use chrono::{DateTime, Utc};
 use serde::de::StdError;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Params {
-    CreateNewTask {
-        description: String,
-        due_date: DateTime<Utc>,
-        assignee: String,
-    },
-    ModifyExistingTask {
-        #[serde(with = "uuid::serde::simple")]
-        task_id: Uuid,
-        fields_to_modify: PartialTask,
-    },
-    DeleteTask {
-        #[serde(with = "uuid::serde::simple")]
-        task_id: Uuid,
-    },
-    QueryTasksParams {
-        query_filters: Vec<FieldFilter>,
-    },
+#[derive(Partial, Debug, Clone, Serialize, Deserialize)]
+pub struct CreateNewTask {
+    pub description: String,
+    pub due_date: DateTime<Utc>,
+    pub assignee: String,
 }
 
-#[derive(Debug)]
-pub enum ParamExtractErr {
-    IncompleteParams,
-    Deserialization { e: serde_json::Error },
-    LLMFailed,
+pub type ModifyExistingTask = PartialTask;
+pub type DeleteTask = PartialTask;
+pub type QueryTasks = TaskFieldFilter;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Extraction {
+    CreateNewTask { found: PartialCreateNewTask },
+    ModifyExistingTask { found: ModifyExistingTask },
+    DeleteTask { found: DeleteTask },
+    QueryTasksParams { found: QueryTasks },
 }
-impl Display for ParamExtractErr {
+impl Display for Extraction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
-impl StdError for ParamExtractErr {}
-impl From<Error> for ParamExtractErr {
+
+#[derive(Debug, Clone)]
+pub enum ExtractErr {
+    IncompleteParams { partial: Extraction },
+    Deserialization,
+    LLMFailed,
+}
+impl Display for ExtractErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+impl StdError for ExtractErr {}
+impl From<Error> for ExtractErr {
     fn from(_value: Error) -> Self {
-        ParamExtractErr::LLMFailed
+        ExtractErr::LLMFailed
     }
 }
 pub async fn extract(
     llm_client: &impl LLMClient<String>,
     intent: &Intent,
     text_message_content: &str,
-) -> Result<Params, ParamExtractErr> {
+) -> Result<Extraction, ExtractErr> {
     let schema = intent.get_params_schema();
     let generate_system_prompt = || -> String {
         let mut system_prompt = String::from("You will be provided text content to parse for input parameters, per the following schema:");
@@ -62,9 +65,9 @@ pub async fn extract(
     let llm_response = llm_client
         .prompt_system_customized(text_message_content, generate_system_prompt().as_str())
         .await?;
-    let parse_result: serde_json::Result<Params> = serde_json::from_str(&llm_response);
+    let parse_result: serde_json::Result<Extraction> = serde_json::from_str(&llm_response);
     match parse_result {
         Ok(params) => Ok(params),
-        Err(e) => Err(ParamExtractErr::Deserialization { e }),
+        Err(_) => Err(ExtractErr::Deserialization),
     }
 }

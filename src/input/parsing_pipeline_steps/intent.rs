@@ -1,5 +1,5 @@
-use crate::domain::task::model::PartialTask;
-use crate::input::parsing_pipeline_steps::params::Params;
+use crate::domain::task::model::{CheckedSqlQuery, TaskField};
+use crate::input::parsing_pipeline_steps::params;
 use crate::llm::interface::LLMClient;
 use anyhow::Error;
 use schemars::schema::RootSchema;
@@ -8,34 +8,37 @@ use serde::de::StdError;
 use serde::Serialize;
 use std::fmt::{Display, Formatter};
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub enum Intent {
     CreateNewTask,
     ModifyExistingTask,
     DeleteTask,
     QueryTasks,
 }
+impl Display for Intent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 impl Intent {
     // TODO: We are currently passing in a concrete instance, but we actually need a
     // json representation of the struct definition i.e the schema
     pub fn get_params_schema(&self) -> RootSchema {
         match self {
-            Intent::CreateNewTask => schema_for_value!(Params::CreateNewTask {
+            Intent::CreateNewTask => schema_for_value!(params::CreateNewTask {
                 description: "".to_string(),
                 due_date: Default::default(),
                 assignee: "".to_string(),
             }),
-            Intent::ModifyExistingTask => schema_for_value!(Params::ModifyExistingTask {
-                task_id: Default::default(),
-                fields_to_modify: PartialTask {
-                    ..Default::default()
-                },
+            Intent::ModifyExistingTask => schema_for_value!(params::ModifyExistingTask {
+                ..Default::default()
             }),
-            Intent::DeleteTask => schema_for_value!(Params::DeleteTask {
-                task_id: Default::default(),
+            Intent::DeleteTask => schema_for_value!(params::DeleteTask {
+                ..Default::default()
             }),
-            Intent::QueryTasks => schema_for_value!(Params::QueryTasksParams {
-                query_filters: vec![],
+            Intent::QueryTasks => schema_for_value!(params::QueryTasks {
+                field: TaskField::Id,
+                sql_query: CheckedSqlQuery("".to_string())
             }),
         }
     }

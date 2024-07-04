@@ -1,5 +1,4 @@
-use super::super::interface::LLMClient;
-use crate::llm::interface::LLMError;
+use crate::llm::interface;
 use async_openai::config::OpenAIConfig;
 use async_openai::types::{
     ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestUserMessageArgs,
@@ -14,7 +13,7 @@ pub struct Client {
     system_prompt: String,
 }
 #[async_trait]
-impl LLMClient<String> for Client {
+impl interface::LLMClient<String> for Client {
     async fn prompt(&self, prompt: &str) -> anyhow::Result<String> {
         Self::prompt_inner(prompt, &self.system_prompt, &self.inner_client).await
     }
@@ -68,11 +67,11 @@ impl Client {
             .choices
             .first()
             .take()
-            .ok_or(LLMError::NoChoicesGenerated)?;
+            .ok_or(interface::LLMError::NoChoicesGenerated)?;
         Ok(completion_choice
             .clone()
             .message
             .content
-            .ok_or(LLMError::NoChoicesGenerated)?)
+            .ok_or(interface::LLMError::NoChoicesGenerated)?)
     }
 }

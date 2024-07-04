@@ -8,8 +8,13 @@ partial_derive = { path = "../../keith/rust/partial_derive" }
 filter_by_field_derive = { path = "../../keith/rust/filter_by_field_derive" }
 async-trait = "0.1.8"
 axum = "0.7.5"
-uuid = { version = "1.9.1", features = ["v4", "fast-rng", "macro-diagnostics", "serde"] }
-chrono = {version="0.4", features = ["serde"]}
+uuid = { version = "1.9.1", features = [
+  "v4",
+  "fast-rng",
+  "macro-diagnostics",
+  "serde",
+] }
+chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.68"
 schemars = "0.8"
@@ -21,5 +26,7 @@ log = "0.4"
 pretty_env_logger = "0.5"
 anyhow = "1.0.86"
 dotenvy = "0.15.7"
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio"] }
+either = "1.13.0"
 async-openai = "0.23.3"
-sqlx = { version = "0.7", features = [ "postgres", "runtime-tokio" ] }
+

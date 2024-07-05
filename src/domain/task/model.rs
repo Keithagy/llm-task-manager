@@ -1,12 +1,11 @@
 use std::fmt::{self, Display};
 
 use chrono::{DateTime, Utc};
-use filter_by_field_derive::FilterByField;
 use partial_derive::Partial;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(FilterByField, Partial, Debug, Clone, Serialize, Deserialize)]
+#[derive(Partial, Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     #[serde(with = "uuid::serde::simple")]
     pub id: Uuid,

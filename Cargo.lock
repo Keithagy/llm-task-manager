@@ -638,16 +638,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fc0510504f03c51ada170672ac806f1f105a88aa97a5281117e1ddc3368e51a"
 
 [[package]]
-name = "filter_by_field_derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "serde",
- "syn 2.0.68",
-]
-
-[[package]]
 name = "flume"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -918,7 +908,6 @@ dependencies = [
  "chrono",
  "dotenvy",
  "either",
- "filter_by_field_derive",
  "log",
  "partial_derive",
  "pretty_env_logger",

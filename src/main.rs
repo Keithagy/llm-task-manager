@@ -9,8 +9,8 @@ mod llm;
 mod telegram_bot;
 mod transcription;
 
-use crate::transcription::interface::TranscriptionClient;
 use sqlx::postgres::PgPool;
+use sqlx::Postgres;
 use std::env;
 use std::sync::Arc;
 use telegram_bot::{Context, Describe};
@@ -50,8 +50,8 @@ In the event of errors or uncertain outcome, return the empty JSON object."#,
         telegram_bot,
         Update::filter_message()
             .enter_dialogue::<Message, InMemStorage<telegram_bot::InteractionSteps>, telegram_bot::InteractionSteps>()
-            .branch(dptree::case![telegram_bot::InteractionSteps::ReceiveInput].endpoint(receive_input))
-            .branch(dptree::case![telegram_bot::InteractionSteps::ValidateParams { input, intent, params }].endpoint(validate_params))
+            .branch(dptree::case![telegram_bot::InteractionSteps::ReceiveInput].endpoint(receive_input::<transcription::backend::openai::WhisperClient, llm::backend::openai::Client, domain::task::service::Service<db::task::Repository<Postgres>>>))
+            .branch(dptree::case![telegram_bot::InteractionSteps::ValidateParams { input, intent, params }].endpoint(validate_params::<transcription::backend::openai::WhisperClient, llm::backend::openai::Client, domain::task::service::Service<db::task::Repository<Postgres>>>))
     )
     .dependencies(dptree::deps![
         ctx,
@@ -97,7 +97,7 @@ async fn receive_input<
     Ok(if let Some(content) = extracted_input {
         match input::parsing_pipeline::from_text(&content, &ctx.llm_client).await {
             Ok((intent, params)) => {
-                match execution::resolve(intent, params, ctx.task_data_flows).await {
+                match execution::resolve(intent, params, &ctx.task_data_flows).await {
                     Ok(success_report) => {
                         bot.send_message(msg.chat.id, success_report.formatted_string())
                             .await;

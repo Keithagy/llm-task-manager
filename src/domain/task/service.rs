@@ -4,7 +4,6 @@ use anyhow::bail;
 use async_trait::async_trait;
 use uuid::Uuid;
 
-#[derive(Clone)]
 pub struct Service<R: Repository<Task>> {
     repo: R,
 }
@@ -18,8 +17,8 @@ impl<R: Repository<Task>> Service<R> {
 }
 
 #[async_trait]
-impl<R: Repository<Task>> TaskDataFlows for Service<R> {
-    async fn create_new_task(&self, fields: PartialTask) -> anyhow::Result<Task> {
+impl<R: Repository<Task> + Sync> TaskDataFlows for Service<R> {
+    async fn create_new_task(&self, mut fields: PartialTask) -> anyhow::Result<Task> {
         fields.id = Some(Uuid::new_v4());
         let new_task = Task::try_from(fields)?;
         self.repo.save(new_task).await

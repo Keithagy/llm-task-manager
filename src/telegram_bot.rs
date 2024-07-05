@@ -1,7 +1,7 @@
 use crate::{
     domain::task::service::TaskDataFlows,
     input::parsing_pipeline_steps::{intent::Intent, params::Extraction},
-    llm,
+    llm, transcription,
 };
 use core::fmt;
 
@@ -34,7 +34,7 @@ pub enum InteractionSteps {
 }
 
 pub struct Context<
-    T: llm::interface::TranscriptionClient,
+    T: transcription::interface::TranscriptionClient,
     L: llm::interface::LLMClient<String>,
     S: TaskDataFlows,
 > {

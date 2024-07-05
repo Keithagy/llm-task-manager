@@ -56,7 +56,7 @@ impl StdError for ExecutionErr {}
 pub async fn resolve<S: crate::domain::task::service::TaskDataFlows>(
     intent: Intent,
     params: params::Extraction,
-    task_data_flows: S,
+    task_data_flows: &S,
 ) -> Result<SuccessReport<Either<Task, DisplayableTaskVec>>> {
     let outcome = match (intent.clone(), params.clone()) {
         (Intent::CreateNewTask, params::Extraction::CreateNewTask { found }) => {

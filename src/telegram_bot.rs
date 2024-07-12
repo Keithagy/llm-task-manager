@@ -14,23 +14,11 @@ pub type Dialogue = dialogue::Dialogue<InteractionSteps, dialogue::InMemStorage<
 pub enum InteractionSteps {
     #[default]
     ReceiveInput,
-    ExtractIntent {
-        input: String,
-    },
-    ExtractParams {
-        input: String,
-        intent: Intent,
-    },
     ValidateParams {
-        input: String,
+        input_log: Vec<String>,
         intent: Intent,
         params: Option<Extraction>,
     },
-    NotifyExecute {
-        intent: Intent,
-        params: Extraction,
-    },
-    NotifyResult,
 }
 
 pub struct Context<

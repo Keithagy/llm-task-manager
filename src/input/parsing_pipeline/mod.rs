@@ -21,9 +21,6 @@ pub async fn from_text(
         .map_err(|e| {
             let clone = e.clone();
             match e {
-                ExtractErr::IncompleteParams { partial } => {
-                    InputParseErr::ParamsErr(clone, intent.clone(), Some(partial))
-                }
                 ExtractErr::Deserialization { .. } => {
                     InputParseErr::ParamsErr(clone, intent.clone(), None)
                 }

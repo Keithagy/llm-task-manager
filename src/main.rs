@@ -51,7 +51,7 @@ In the event of errors or uncertain outcome, return the empty JSON object."#,
         Update::filter_message()
             .enter_dialogue::<Message, InMemStorage<telegram_bot::InteractionSteps>, telegram_bot::InteractionSteps>()
             .branch(dptree::case![telegram_bot::InteractionSteps::ReceiveInput].endpoint(receive_input::<transcription::backend::openai::WhisperClient, llm::backend::openai::Client, domain::task::service::Service<db::task::Repository<Postgres>>>))
-            .branch(dptree::case![telegram_bot::InteractionSteps::ValidateParams { input, intent, params }].endpoint(validate_params::<transcription::backend::openai::WhisperClient, llm::backend::openai::Client, domain::task::service::Service<db::task::Repository<Postgres>>>))
+            .branch(dptree::case![telegram_bot::InteractionSteps::ValidateParams { input_log, intent, params }].endpoint(validate_params::<transcription::backend::openai::WhisperClient, llm::backend::openai::Client, domain::task::service::Service<db::task::Repository<Postgres>>>))
     )
     .dependencies(dptree::deps![
         ctx,
@@ -97,44 +97,7 @@ async fn receive_input<
     Ok(if let Some(content) = extracted_input {
         match input::parsing_pipeline::from_text(&content, &ctx.llm_client).await {
             Ok((intent, params)) => {
-                match execution::resolve(intent, params, &ctx.task_data_flows).await {
-                    Ok(success_report) => {
-                        bot.send_message(msg.chat.id, success_report.formatted_string())
-                            .await;
-                    }
-                    Err(e) => {
-                        match e {
-                            execution::ExecutionErr::InvalidIntentParamPairing {
-                                attempted_intent,
-                                attempted_params,
-                            } => {
-                                // WARN: Getting to this branch indicates a bug in Intent-to-Param
-                                // matching logic
-                                bot.send_message(msg.chat.id, format!( r#"Oops, you've uncovered a bug! Let the dev know. Thanks and sorry!
-Intent-Param-Mismatch
-Intent: {}
-Params: {}
-"#, attempted_intent, attempted_params)).await;
-                            }
-                            // WARN: Everything below indicates some arbitrary service-layer error.
-                            // Use service-layer logs to debug that.
-                            execution::ExecutionErr::TaskCreationError { e }
-                            | execution::ExecutionErr::TaskModificationError { e }
-                            | execution::ExecutionErr::TaskDeletionError { e }
-                            | execution::ExecutionErr::TaskRetrievalError { e } => {
-                                bot.send_message(
-                                    msg.chat.id,
-                                    format!(
-                                        r#"Your operation failed. Here's the error:
-{}"#,
-                                        e
-                                    ),
-                                )
-                                .await;
-                            }
-                        };
-                    }
-                }
+                dispatch(&bot, &msg, dialogue, ctx, intent, params).await;
             }
             Err(e) => {
                 match e {
@@ -174,7 +137,7 @@ Params: {}
                         // transcription / extraction against that
                         dialogue
                             .update(telegram_bot::InteractionSteps::ValidateParams {
-                                input: content,
+                                input_log: vec![content],
                                 intent,
                                 params: extraction_attempt,
                             })
@@ -197,6 +160,70 @@ Params: {}
     })
 }
 
+async fn dispatch<
+    T: transcription::interface::TranscriptionClient,
+    L: llm::interface::LLMClient<String>,
+    S: domain::task::service::TaskDataFlows,
+>(
+    bot: &Bot,
+    msg: &Message,
+    dialogue: telegram_bot::Dialogue,
+    ctx: Arc<Context<T, L, S>>,
+    intent: input::parsing_pipeline_steps::intent::Intent,
+    params: input::parsing_pipeline_steps::params::Extraction,
+) -> anyhow::Result<()> {
+    Ok(
+        match execution::resolve(intent, params, &ctx.task_data_flows).await {
+            Ok(success_report) => {
+                bot.send_message(msg.chat.id, success_report.formatted_string())
+                    .await?;
+                dialogue
+                    .update(telegram_bot::InteractionSteps::ReceiveInput)
+                    .await;
+            }
+            Err(e) => {
+                match e {
+                    execution::ExecutionErr::InvalidIntentParamPairing {
+                        attempted_intent,
+                        attempted_params,
+                    } => {
+                        // WARN: Getting to this branch indicates a bug in Intent-to-Param
+                        // matching logic
+                        bot.send_message(
+                            msg.chat.id,
+                            format!(
+                                r#"Oops, you've uncovered a bug! Let the dev know. Thanks and sorry!
+Intent-Param-Mismatch
+Intent: {}
+Params: {}
+"#,
+                                attempted_intent, attempted_params
+                            ),
+                        )
+                        .await;
+                    }
+                    // WARN: Everything below indicates some arbitrary service-layer error.
+                    // Use service-layer logs to debug that.
+                    execution::ExecutionErr::TaskCreationError { e }
+                    | execution::ExecutionErr::TaskModificationError { e }
+                    | execution::ExecutionErr::TaskDeletionError { e }
+                    | execution::ExecutionErr::TaskRetrievalError { e } => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!(
+                                r#"Your operation failed. Here's the error:
+{}"#,
+                                e
+                            ),
+                        )
+                        .await;
+                    }
+                };
+            }
+        },
+    )
+}
+
 async fn validate_params<
     T: transcription::interface::TranscriptionClient,
     L: llm::interface::LLMClient<String>,
@@ -206,16 +233,112 @@ async fn validate_params<
     msg: Message,
     dialogue: telegram_bot::Dialogue,
     ctx: Arc<Context<T, L, S>>,
-    input: String,
+    input_log: Vec<String>,
     intent: input::parsing_pipeline_steps::intent::Intent,
     params: Option<input::parsing_pipeline_steps::params::Extraction>,
 ) -> anyhow::Result<()> {
-    // Again, safe concurrent access to the shared context
-    let task_data_flows = &ctx.task_data_flows;
+    let extracted_input = match &msg.kind {
+        MessageKind::Common(msg_common) => match &msg_common.media_kind {
+            MediaKind::Text(content) => Some(content.text.clone()),
+            MediaKind::Voice(content) => transcribe_voice_input(&bot, content, &msg, &ctx).await?,
+            other_media_kinds => {
+                bot.send_message(
+                    msg.chat.id,
+                    format!(
+                        "I don't know what to do with {} messages. Sorry!",
+                        other_media_kinds.describe()
+                    ),
+                )
+                .await?;
+                None
+            }
+        },
+        _ => None,
+    };
+    Ok(
+        if let Some(params_supplementation_input) = extracted_input {
+            let maybe_additional_params = input::parsing_pipeline_steps::params::extract(
+                &ctx.llm_client,
+                &intent,
+                &params_supplementation_input,
+            )
+            .await;
+            match maybe_additional_params {
+                Ok(additional) => {
+                    use input::parsing_pipeline_steps::params;
+                    let latest_params = match params {
+                    Some(existing) => match ( existing, additional ) {
+                        (params::Extraction::CreateNewTask { found: existing_params }, params::Extraction::CreateNewTask { found: additional_params }) => params::Extraction::CreateNewTask { found: existing_params.merge(additional_params, true) },
+                        (params::Extraction::ModifyExistingTask { found: existing_params }, params::Extraction::ModifyExistingTask { found: additional_params }) => params::Extraction::ModifyExistingTask { found: existing_params.merge(additional_params, true) },
+                        (params::Extraction::DeleteTask { found: existing_params }, params::Extraction::DeleteTask { found: additional_params }) => params::Extraction::DeleteTask { found: existing_params.merge(additional_params, true) },
+                        (params::Extraction::QueryTasks { found: _ }, params::Extraction::QueryTasks { found: additional_params }) => params::Extraction::QueryTasks { found: additional_params},
+                        _ => anyhow::bail!("Error in validation step: Existing params and additional params are not of the same variants")
+                    },
+                    None => additional,
+                };
 
-    // Handler logic here...
-
-    Ok(())
+                    match latest_params.clone() {
+                        input::parsing_pipeline_steps::params::Extraction::QueryTasks { found } => {
+                            todo!()
+                        }
+                        input::parsing_pipeline_steps::params::Extraction::CreateNewTask {
+                            found,
+                        } => match found.check_complete() {
+                            Ok(_) => {
+                                dispatch(&bot, &msg, dialogue, ctx, intent, latest_params).await;
+                            }
+                            Err(missing_fields) => {
+                                bot.send_message(
+                                    msg.chat.id,
+                                    format!(
+                                        "You're missing the some information before I can process your information: {}",
+                                        missing_fields
+                                    ),
+                                )
+                                .await;
+                                let mut updated_input_log = input_log.clone();
+                                updated_input_log.push(params_supplementation_input);
+                                dialogue.update(telegram_bot::InteractionSteps::ValidateParams {
+                                    input_log: updated_input_log,
+                                    intent,
+                                    params: Some(latest_params),
+                                });
+                            }
+                        },
+                        input::parsing_pipeline_steps::params::Extraction::ModifyExistingTask {
+                            found,
+                        }
+                        | input::parsing_pipeline_steps::params::Extraction::DeleteTask { found } =>
+                        {
+                            match found.check_complete() {
+                                Ok(_) => {
+                                    // TODO: route and resolve execution with full set of params
+                                    todo!()
+                                }
+                                Err(missing_fields) => {
+                                    // TODO: ask for missing fields
+                                    todo!()
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    bot.send_message(
+                    msg.chat.id,
+                    format!(
+                        r#"I ran into an error extracting parameters for your intended operation.
+                        Error: {}
+                        Intent: {}
+                        "#,
+                        e,
+                        intent,
+                    ),
+                ).await;
+                }
+            }
+        },
+    )
 }
 
 async fn transcribe_voice_input<

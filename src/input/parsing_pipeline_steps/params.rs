@@ -10,7 +10,7 @@ use crate::llm::interface::LLMClient;
 use chrono::{DateTime, Utc};
 use serde::de::StdError;
 
-#[derive(Partial, Debug, Clone, Serialize, Deserialize)]
+#[derive(Partial, Default, Debug, Clone, Serialize, Deserialize)]
 pub struct CreateNewTask {
     pub description: String,
     pub due_date: DateTime<Utc>,
@@ -22,11 +22,21 @@ pub type DeleteTask = PartialTask;
 pub type QueryTasks = TaskFieldFilter;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+/// Note that `found` in each variant can be incomplete, since it is likely that the user misses
+/// out at least one param in the initial input.
 pub enum Extraction {
     CreateNewTask { found: PartialCreateNewTask },
     ModifyExistingTask { found: ModifyExistingTask },
     DeleteTask { found: DeleteTask },
-    QueryTasksParams { found: QueryTasks },
+    QueryTasks { found: QueryTasks },
+}
+
+impl Default for Extraction {
+    fn default() -> Self {
+        Self::CreateNewTask {
+            found: PartialCreateNewTask::default(),
+        }
+    }
 }
 impl Display for Extraction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -36,7 +46,6 @@ impl Display for Extraction {
 
 #[derive(Debug, Clone)]
 pub enum ExtractErr {
-    IncompleteParams { partial: Extraction },
     Deserialization,
     LLMFailed,
 }

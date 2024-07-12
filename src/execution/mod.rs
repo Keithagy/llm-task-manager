@@ -86,7 +86,7 @@ pub async fn resolve<S: crate::domain::task::service::TaskDataFlows>(
                 .map_err(|e| ExecutionErr::TaskDeletionError { e })?;
             Ok(Either::Left(deleted_task))
         }
-        (Intent::QueryTasks, params::Extraction::QueryTasksParams { found }) => {
+        (Intent::QueryTasks, params::Extraction::QueryTasks { found }) => {
             let retrieved_tasks = task_data_flows
                 .retrieve_tasks(found)
                 .await

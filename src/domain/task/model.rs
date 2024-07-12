@@ -60,6 +60,14 @@ pub struct TaskFieldFilter {
     pub field: TaskField,
     pub sql_query: CheckedSqlQuery,
 }
+impl Default for TaskFieldFilter {
+    fn default() -> Self {
+        Self {
+            field: TaskField::Id,
+            sql_query: CheckedSqlQuery(String::from("")),
+        }
+    }
+}
 
 // NOTE: this is distinct from `&str` because it denotes that some SQL validation step has been
 // cleared prior to being passed to the database
